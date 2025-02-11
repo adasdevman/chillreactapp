@@ -1,4 +1,32 @@
 {
-  "name": "ChillnowApp",
-  "displayName": "ChillnowApp"
+  "expo": {
+    "name": "ChillnowApp",
+    "slug": "ChillnowApp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/app_icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/images/app_icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#222222"
+    },
+    "assetBundlePatterns": [
+      "**/*",
+      "assets/fonts/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/app_icon.png",
+        "backgroundColor": "#222222"
+      }
+    },
+    "entryPoint": "./App.tsx",
+    "plugins": [
+      "expo-font"
+    ]
+  }
 }
