@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/fonts';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { API_URL } from '../services/api';
+import { API_URL } from '../config';
 
 interface PlaceCardHorizontalProps {
   title: string;
@@ -21,13 +21,26 @@ export const PlaceCardHorizontal: React.FC<PlaceCardHorizontalProps> = ({
   onPress,
 }) => {
   const getImageUrl = (url: string) => {
-    if (!url) return '';
-    if (url.startsWith('http')) return url;
-    return `${API_URL}${url}`;
+    if (!url) {
+      console.log('No image URL provided');
+      return null;
+    }
+
+    if (url.startsWith('http')) {
+      console.log('Using full URL:', url);
+      return url;
+    }
+
+    const finalUrl = `${API_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+    console.log('Constructed URL:', finalUrl);
+    return finalUrl;
   };
 
   const renderImage = () => {
-    if (!imageUrl) {
+    const finalImageUrl = getImageUrl(imageUrl);
+    console.log('Final image URL:', finalImageUrl);
+    
+    if (!finalImageUrl) {
       return (
         <View style={[styles.image, styles.placeholderContainer]}>
           <MaterialCommunityIcons name="image-off" size={30} color={colors.yellow} />
@@ -37,9 +50,12 @@ export const PlaceCardHorizontal: React.FC<PlaceCardHorizontalProps> = ({
 
     return (
       <Image 
-        source={{ uri: getImageUrl(imageUrl) }}
+        source={{ uri: finalImageUrl }}
         style={styles.image}
         resizeMode="cover"
+        onError={(error) => {
+          console.log('Error loading image:', finalImageUrl, error);
+        }}
       />
     );
   };

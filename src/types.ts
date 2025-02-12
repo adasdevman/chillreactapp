@@ -126,6 +126,13 @@ export interface BillingInfo {
   city: string;
 }
 
+export interface PaymentResponse {
+  id: string;
+  montant_total: number;
+  montant_avance: number;
+  taux_avance: number;
+}
+
 export type RootStackParamList = {
   Auth: undefined;
   Home: undefined;

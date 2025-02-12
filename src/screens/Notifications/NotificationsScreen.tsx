@@ -1,10 +1,12 @@
-import React from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { colors } from '../../theme/colors';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
+import { api } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 
 type NotificationsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -12,37 +14,67 @@ interface Notification {
   id: number;
   title: string;
   message: string;
-  date: string;
-  isRead: boolean;
+  created: string;
+  is_read: boolean;
 }
-
-// Données de test
-const mockNotifications: Notification[] = [
-  {
-    id: 1,
-    title: "Nouvelle annonce",
-    message: "Une nouvelle soirée a été ajoutée près de chez vous !",
-    date: "2024-01-24T18:53:00",
-    isRead: false
-  },
-  {
-    id: 2,
-    title: "Réservation confirmée",
-    message: "Votre réservation pour l'Eco-Friendly Tour a été confirmée.",
-    date: "2024-01-23T15:30:00",
-    isRead: true
-  },
-  {
-    id: 3,
-    title: "Rappel événement",
-    message: "Night Fever Party commence dans 2 heures !",
-    date: "2024-01-22T20:00:00",
-    isRead: true
-  }
-];
 
 export default function NotificationsScreen() {
   const navigation = useNavigation<NotificationsScreenNavigationProp>();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      const response = await api.get('/api/notifications/');
+      setNotifications(response.data);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (notificationId: number) => {
+    Alert.alert(
+      "Supprimer la notification",
+      "Êtes-vous sûr de vouloir supprimer cette notification ?",
+      [
+        {
+          text: "Annuler",
+          style: "cancel"
+        },
+        {
+          text: "Supprimer",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.delete(`/api/notifications/${notificationId}/`);
+              setNotifications(prev => prev.filter(n => n.id !== notificationId));
+            } catch (error) {
+              console.error('Error deleting notification:', error);
+              Alert.alert('Erreur', 'Impossible de supprimer la notification');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const markAsRead = async (notificationId: number) => {
+    try {
+      await api.patch(`/api/notifications/${notificationId}/`, { is_read: true });
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+      );
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -74,24 +106,43 @@ export default function NotificationsScreen() {
 
       {/* Liste des notifications */}
       <ScrollView style={styles.content}>
-        {mockNotifications.map(notification => (
+        {notifications.map(notification => (
           <TouchableOpacity 
             key={notification.id}
             style={[
               styles.notificationItem,
-              !notification.isRead && styles.unreadNotification
+              !notification.is_read && styles.unreadNotification
             ]}
+            onPress={() => markAsRead(notification.id)}
           >
             <View style={styles.notificationContent}>
               <Text style={styles.notificationTitle}>{notification.title}</Text>
               <Text style={styles.notificationMessage}>{notification.message}</Text>
               <Text style={styles.notificationDate}>
-                {formatDate(notification.date)}
+                {formatDate(notification.created)}
               </Text>
             </View>
-            {!notification.isRead && <View style={styles.unreadDot} />}
+            <TouchableOpacity
+              onPress={() => handleDelete(notification.id)}
+              style={styles.deleteButton}
+            >
+              <MaterialCommunityIcons 
+                name="delete-outline" 
+                size={20} 
+                color={colors.yellow}
+              />
+            </TouchableOpacity>
+            {!notification.is_read && <View style={styles.unreadDot} />}
           </TouchableOpacity>
         ))}
+        
+        {notifications.length === 0 && !loading && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>
+              Aucune notification
+            </Text>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -164,5 +215,19 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.yellow,
     marginLeft: 10,
+  },
+  deleteButton: {
+    padding: 10,
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 50,
+  },
+  emptyStateText: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 16,
+    fontFamily: 'Inter_18pt-Regular',
   },
 }); 

@@ -10,7 +10,16 @@ import WebView from 'react-native-webview';
 import AuthPopup from '../../components/AuthPopup';
 import { useAuth } from '../../contexts/AuthContext';
 import { fonts } from '../../theme/fonts';
-import type { Announcement } from '../../types';
+import type { Announcement, BillingInfo } from '../../types';
+import type { User as ExtendedUser } from '../../types';
+import { API_CONFIG, handleApiError } from '../../config';
+
+interface PaymentResponse {
+  montant_total: number;
+  taux_avance: number;
+  montant_avance: number;
+  id: string | null;
+}
 
 type PaymentScreenRouteProp = RouteProp<RootStackParamList, 'Payment'>;
 type PaymentScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -18,22 +27,6 @@ type PaymentScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>
 interface PaymentScreenProps {
   announcement: Announcement;
   paymentType: 'ticket' | 'reservation';
-}
-
-interface BillingInfo {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-}
-
-interface PaymentResponse {
-  id: string;
-  montant_total: number;
-  montant_avance: number;
-  taux_avance: number;
 }
 
 const CINETPAY_SCRIPT = `
@@ -125,6 +118,7 @@ export default function PaymentScreen() {
   const [paymentDetails, setPaymentDetails] = useState<PaymentResponse | null>(null);
   const [creatingPayment, setCreatingPayment] = useState(false);
   const [error, setError] = useState('');
+  const [paymentScript, setPaymentScript] = useState<string>('');
 
   const formulas = announcement?.tarifs?.length > 0 
     ? announcement.tarifs 
@@ -173,86 +167,58 @@ export default function PaymentScreen() {
     }
   }, [user]);
 
-  const handleBillingSubmit = async () => {
-    if (!selectedFormula) {
-      Alert.alert(
-        'Sélection requise',
-        paymentType === 'ticket' 
-          ? 'Veuillez sélectionner un type de billet'
-          : 'Veuillez sélectionner une table',
-        [{ text: 'OK', style: 'default' }]
-      );
-      return;
-    }
+  useEffect(() => {
+    // Add CinetPay SDK script
+    const script = `
+      <script src="https://cdn.cinetpay.com/seamless/main.js" type="text/javascript"></script>
+    `;
+    setPaymentScript(script);
+  }, []);
 
-    // Vérifier si tous les champs du formulaire sont remplis
-    const requiredFields = {
-      firstName: 'Prénom',
-      lastName: 'Nom',
-      email: 'Email',
-      phone: 'Téléphone',
-      address: 'Adresse',
-      city: 'Ville'
-    };
-
-    const emptyFields = Object.entries(requiredFields).filter(
-      ([key]) => !billingInfo[key as keyof typeof billingInfo]?.trim()
-    );
-
-    if (emptyFields.length > 0) {
-      Alert.alert(
-        'Champs requis',
-        `Veuillez remplir les champs suivants : \n${emptyFields.map(([_, label]) => `- ${label}`).join('\n')}`,
-        [{ text: 'OK', style: 'default' }]
-      );
-      return;
-    }
-
-    if (!user) {
-      try {
-        const response = await api.post('api/auth/check-email/', {
-          email: billingInfo.email
+  const handleFormulaSelect = (formulaId: number) => {
+    setSelectedFormula(formulaId);
+    if (formulaId) {
+      const selectedTarif = formulas.find(f => f.id === formulaId);
+      if (selectedTarif) {
+        const isEvent = announcement.categorie.nom === 'EVENT';
+        const tauxAvance = isEvent ? 100 : (announcement.annonceur?.taux_avance || 50);
+        setPaymentDetails({
+          montant_total: selectedTarif.prix,
+          taux_avance: tauxAvance,
+          montant_avance: isEvent ? selectedTarif.prix : Math.round(selectedTarif.prix * (tauxAvance / 100)),
+          id: null
         });
-        setIsExistingUser(response.data.exists);
-        setShowAuthPopup(true);
-      } catch (error) {
-        Alert.alert('Erreur', 'Une erreur est survenue');
       }
-      return;
     }
+  };
 
+  const handleBillingSubmit = async () => {
     try {
+      if (!selectedFormula) {
+        setError('Veuillez sélectionner une formule');
+        return;
+      }
+
+      if (!paymentDetails) {
+        setError('Une erreur est survenue avec les détails du paiement');
+        return;
+      }
+
       setCreatingPayment(true);
       setError('');
 
-      const response = await api.post('/api/payment/create/', {
+      // Créer le paiement au moment du clic sur le bouton
+      const response = await api.post<PaymentResponse>('/api/payments/create/', {
         annonce: announcement.id,
         payment_type: paymentType,
         tarif: selectedFormula
       });
 
       setPaymentDetails(response.data);
-      setPaymentId(response.data.id);
-      
-      // Injecter le script de paiement avec le montant d'avance
-      const injectPaymentData = `
-        initPayment({
-          paymentId: '${response.data.id}',
-          amount: ${response.data.montant_avance}, // Utiliser le montant d'avance
-          description: '${announcement?.titre || 'Paiement'} - Avance de ${response.data.taux_avance}%',
-          customerName: '${billingInfo.firstName}',
-          customerSurname: '${billingInfo.lastName}',
-          customerEmail: '${billingInfo.email}',
-          customerPhone: '${billingInfo.phone}',
-          customerAddress: '${billingInfo.address}',
-          customerCity: '${billingInfo.city}'
-        });
-      `;
-
       setShowPayment(true);
     } catch (error) {
-      console.error('Payment creation error:', error);
-      setError('Une erreur est survenue lors de la création du paiement');
+      console.error('Payment error:', error);
+      setError('Une erreur est survenue lors de l\'initialisation du paiement');
     } finally {
       setCreatingPayment(false);
     }
@@ -268,12 +234,13 @@ export default function PaymentScreen() {
   const handleAuthSuccess = async () => {
     setShowAuthPopup(false);
     if (user) {
+      const extendedUser = user as unknown as ExtendedUser;
       setBillingInfo(prev => ({
         ...prev,
-        firstName: user.first_name || '',
-        lastName: user.last_name || '',
-        email: user.email || '',
-        phone: user.phone_number || prev.phone || '',
+        firstName: extendedUser.first_name || '',
+        lastName: extendedUser.last_name || '',
+        email: extendedUser.email || '',
+        phone: extendedUser.phone_number || prev.phone || '',
         address: prev.address,
         city: prev.city
       }));
@@ -282,41 +249,78 @@ export default function PaymentScreen() {
 
   const handleMessage = async (event: any) => {
     try {
-      const message = JSON.parse(event.nativeEvent.data);
+      const data = JSON.parse(event.nativeEvent.data);
+      console.log('Payment response:', data);
       
-      switch (message.type) {
-        case 'payment_success':
-          await api.patch(`api/payments/${paymentId}/update/`, {
-            status: 'completed',
-            transaction_data: message.data
-          });
-          navigation.navigate('PaymentSuccess');
-          break;
-
-        case 'payment_failed':
-          Alert.alert(
-            'Erreur',
-            'Le paiement a échoué. Veuillez réessayer.'
-          );
-          break;
-
-        case 'payment_closed':
-          if (message.data.status !== "ACCEPTED") {
-            navigation.goBack();
+      switch (data.type) {
+        case 'SUCCESS':
+          // Envoyer la confirmation au backend
+          try {
+            await api.post('/api/payments/confirm/', {
+              transaction_id: data.data.transaction_id,
+              payment_id: paymentDetails?.id,
+              status: 'SUCCESS'
+            });
+            navigation.navigate('PaymentSuccess');
+          } catch (error) {
+            console.error('Error confirming payment:', error);
+            setError('Le paiement a réussi mais nous n\'avons pas pu confirmer la transaction');
+            setShowPayment(false);
           }
+          break;
+          
+        case 'ERROR':
+          console.error('Payment error:', data.error);
+          setError('Une erreur est survenue lors du paiement');
+          setShowPayment(false);
+          navigation.navigate('AnnouncementDetail', { announcement });
+          break;
+          
+        case 'CLOSE':
+          setShowPayment(false);
+          navigation.navigate('AnnouncementDetail', { announcement });
           break;
       }
     } catch (error) {
-      console.error('Erreur lors du traitement du paiement:', error);
-      Alert.alert(
-        'Erreur',
-        'Une erreur est survenue lors du traitement du paiement.'
-      );
+      console.error('Error handling payment message:', error);
+      setError('Une erreur est survenue lors du traitement de la réponse de paiement');
+      setShowPayment(false);
+      navigation.navigate('AnnouncementDetail', { announcement });
     }
   };
 
+  const renderPaymentDetails = () => {
+    if (!paymentDetails) return null;
+
+    const isEvent = announcement.categorie.nom === 'EVENT';
+
+    return (
+      <View style={styles.paymentDetails}>
+        <Text style={styles.paymentTitle}>Détails du paiement</Text>
+        
+        <View style={styles.paymentRow}>
+          <Text style={styles.paymentLabel}>Montant total</Text>
+          <Text style={styles.paymentAmount}>{paymentDetails.montant_total} FCFA</Text>
+        </View>
+
+        {!isEvent && (
+          <>
+            <View style={styles.paymentRow}>
+              <Text style={styles.paymentLabel}>Taux d'avance</Text>
+              <Text style={styles.paymentAmount}>{paymentDetails.taux_avance}%</Text>
+            </View>
+            <View style={styles.paymentRow}>
+              <Text style={styles.paymentLabel}>À payer maintenant</Text>
+              <Text style={styles.paymentAmount}>{paymentDetails.montant_avance} FCFA</Text>
+            </View>
+          </>
+        )}
+      </View>
+    );
+  };
+
   const renderBillingForm = () => (
-    <ScrollView style={styles.formContainer}>
+    <ScrollView style={styles.content}>
       <View style={styles.eventDetailsContainer}>
         <Text style={styles.eventTitle}>{announcement?.titre || 'Événement'}</Text>
         <Text style={styles.eventPrice}>
@@ -341,7 +345,7 @@ export default function PaymentScreen() {
                 styles.formulaCard,
                 selectedFormula === tarif.id && styles.formulaCardSelected
               ]}
-              onPress={() => setSelectedFormula(tarif.id)}
+              onPress={() => handleFormulaSelect(tarif.id)}
             >
               <Text style={styles.formulaName}>{tarif.nom}</Text>
               <Text style={styles.formulaPrice}>{tarif.prix.toLocaleString()} FCFA</Text>
@@ -436,38 +440,16 @@ export default function PaymentScreen() {
         />
       </View>
 
-      <View style={styles.summaryContainer}>
-        <Text style={styles.summaryTitle}>Résumé du paiement</Text>
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Montant total:</Text>
-          <Text style={styles.summaryValue}>
-            {paymentDetails ? paymentDetails.montant_total.toLocaleString() : (selectedFormula ? formulas.find(t => t.id === selectedFormula)?.prix.toLocaleString() : 'N/A')} FCFA
-          </Text>
-        </View>
-        {paymentDetails && (
-          <>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Taux d'avance:</Text>
-              <Text style={styles.summaryValue}>{paymentDetails.taux_avance}%</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Montant à payer maintenant:</Text>
-              <Text style={styles.summaryValue}>{paymentDetails.montant_avance.toLocaleString()} FCFA</Text>
-            </View>
-          </>
-        )}
-      </View>
+      {renderPaymentDetails()}
 
-      <TouchableOpacity
-        style={[styles.submitButton, creatingPayment && styles.submitButtonDisabled]}
+      <TouchableOpacity 
+        style={styles.submitButton}
         onPress={handleBillingSubmit}
-        disabled={creatingPayment}
+        disabled={loading}
       >
-        {creatingPayment ? (
-          <ActivityIndicator color={colors.darkGrey} />
-        ) : (
-          <Text style={styles.submitButtonText}>Procéder au paiement</Text>
-        )}
+        <Text style={styles.submitButtonText}>
+          {loading ? 'Chargement...' : 'Procéder au paiement'}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -485,13 +467,77 @@ export default function PaymentScreen() {
         <View style={styles.placeholder} />
       </View>
 
-      {!showPayment ? renderBillingForm() : (
+      {showPayment ? (
         <WebView
-          source={{ html: PAYMENT_HTML }}
-          injectedJavaScript={injectPaymentData}
+          source={{ html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <script src="https://cdn.cinetpay.com/seamless/main.js"></script>
+              <style>
+                body { margin: 0; padding: 0; background: transparent; }
+                #payment-container { width: 100%; height: 100%; }
+              </style>
+            </head>
+            <body>
+              <div id="payment-container"></div>
+              <script>
+                // Initialize CinetPay
+                CinetPay.setConfig({
+                  apikey: '1624598232678e5f63333183.41181912',
+                  site_id: '105886168',
+                  notify_url: 'https://chillbackend.onrender.com/api/payment/notify/',
+                  mode: 'PRODUCTION',
+                  close_after_response: false,
+                });
+
+                // Générer un transaction_id unique
+                const transactionId = 'CN_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+                // Start payment
+                CinetPay.getCheckout({
+                  transaction_id: transactionId,
+                  amount: ${paymentDetails?.montant_avance || 0},
+                  currency: 'XOF',
+                  channels: 'ALL',
+                  description: 'Paiement pour ${announcement.titre}',
+                  customer_name: "${billingInfo.lastName}",
+                  customer_surname: "${billingInfo.firstName}",
+                  customer_email: "${billingInfo.email}",
+                  customer_phone_number: "${billingInfo.phone}",
+                  customer_address: "${billingInfo.address}",
+                  customer_city: "${billingInfo.city}",
+                  // Ajouter les callbacks
+                  onClose: () => {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'CLOSE' }));
+                  },
+                  onError: (error) => {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ERROR', error }));
+                  },
+                  onSuccess: (data) => {
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ 
+                      type: 'SUCCESS', 
+                      data: { ...data, transaction_id: transactionId }
+                    }));
+                  },
+                });
+              </script>
+            </body>
+            </html>
+          `}}
           onMessage={handleMessage}
           style={styles.webview}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          startInLoadingState={true}
+          scalesPageToFit={true}
+          mixedContentMode="always"
+          allowsInlineMediaPlayback={true}
+          mediaPlaybackRequiresUserAction={false}
         />
+      ) : (
+        renderBillingForm()
       )}
 
       <AuthPopup
@@ -510,7 +556,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.darkGrey,
-    
   },
   header: {
     flexDirection: 'row',
@@ -546,7 +591,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent'
   },
-  formContainer: {
+  content: {
     padding: 20,
   },
   formTitle: {
@@ -663,29 +708,29 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
     textAlign: 'center',
   },
-  summaryContainer: {
+  paymentDetails: {
     backgroundColor: colors.lightGrey,
     padding: 15,
     borderRadius: 8,
     marginVertical: 15,
   },
-  summaryTitle: {
+  paymentTitle: {
     fontSize: 18,
     fontFamily: fonts.bold,
     color: 'white',
     marginBottom: 10,
   },
-  summaryRow: {
+  paymentRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginVertical: 5,
   },
-  summaryLabel: {
+  paymentLabel: {
     fontSize: 16,
     fontFamily: fonts.regular,
     color: 'white',
   },
-  summaryValue: {
+  paymentAmount: {
     fontSize: 16,
     fontFamily: fonts.bold,
     color: colors.yellow,

@@ -10,7 +10,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../services/api';
 import CustomAlert from '../../components/CustomAlert';
-import { API_URL } from '../../services/api';
+import { API_URL } from '../../config';
+import { fonts } from '../../theme/fonts';
 
 type AnnouncementDetailRouteProp = RouteProp<RootStackParamList, 'AnnouncementDetail'>;
 type AnnouncementDetailNavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -29,13 +30,29 @@ enum CategoryIds {
 const getImageUrl = (url: string) => {
   if (!url) return '';
   if (url.startsWith('http')) return url;
-  return `${API_URL}${url}`;
+  return `${API_URL}${url.startsWith('/') ? '' : '/'}${url}`;
 };
 
 export default function AnnouncementDetailScreen({ route }: Props) {
-  const { announcement } = route.params;
-  const isEventType = announcement.categorie.id === CategoryIds.EVENT;
   const navigation = useNavigation<AnnouncementDetailNavigationProp>();
+
+  // Vérifier si les paramètres de route sont valides
+  if (!route.params?.announcement) {
+    console.error('Pas d\'annonce fournie');
+    navigation.goBack();
+    return null;
+  }
+
+  const { announcement } = route.params;
+  
+  // Vérifier si l'annonce a toutes les propriétés requises
+  if (!announcement.id || !announcement.titre || !announcement.categorie) {
+    console.error('Données d\'annonce invalides:', announcement);
+    navigation.goBack();
+    return null;
+  }
+
+  const isEventType = announcement.categorie?.id === CategoryIds.EVENT;
   const { user } = useAuth();
   const scrollY = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.8)).current;
