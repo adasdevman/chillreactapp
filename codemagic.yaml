@@ -1,9 +1,31 @@
 workflows:
-
-    sample-workflow:
-
-        name: Codemagic Sample Workflow
-
-        max_build_duration: 120
-
-        instance_type: mac_mini_m2
+  ios_build:
+    name: Build iOS
+    max_build_duration: 60
+    environment:
+      xcode: latest
+      node: latest
+      cocoapods: latest
+    scripts:
+      - echo "Installing dependencies..."
+      - npm install
+      - cd ios && pod install && cd ..
+      - echo "Building iOS app..."
+      - npx react-native run-ios --configuration Release
+    artifacts:
+      - ios/build/Release-iphoneos/*.ipa
+    cache:
+      paths:
+        - node_modules
+        - ios/Pods
+workflows:
+      push:
+        name: Push to App Store
+        max_build_duration: 60
+        environment:
+          xcode: latest
+        scripts:
+          - echo "Building iOS app..."
+          - npx react-native run-ios --configuration Release
+          - echo "Pushing to App Store..."
+          - fastlane ios beta
