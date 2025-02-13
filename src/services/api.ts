@@ -53,18 +53,49 @@ export const api = axios.create({
   }
 });
 
-// Request interceptor
+// Add refresh token handling
+const refreshAccessToken = async () => {
+  try {
+    const refreshToken = await AsyncStorage.getItem('@ChillNow:refreshToken');
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    const response = await axios.post(`${API_URL}/api/auth/token/refresh/`, {
+      refresh: refreshToken
+    });
+
+    const { access } = response.data;
+    await AsyncStorage.setItem('@ChillNow:token', access);
+    return access;
+  } catch (error) {
+    console.error('Error refreshing token:', error);
+    throw error;
+  }
+};
+
+// Update request interceptor
 api.interceptors.request.use(
   async (config) => {
-    // Log the complete URL being called
     const fullUrl = `${config.baseURL}${config.url}`;
     console.log('Full request URL:', fullUrl);
     console.log('Request method:', config.method);
     console.log('Request headers:', config.headers);
     console.log('Request data:', config.data);
-    
-    const token = await AsyncStorage.getItem('@ChillNow:token');
-    if (token && shouldAddToken(config.url)) {
+
+    if (shouldAddToken(config.url)) {
+      let token = await AsyncStorage.getItem('@ChillNow:token');
+      
+      if (!token) {
+        // Try to refresh if no token is available
+        try {
+          token = await refreshAccessToken();
+        } catch (error) {
+          console.error('Could not refresh token:', error);
+          throw error;
+        }
+      }
+      
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -75,25 +106,40 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor
+// Update response interceptor
 api.interceptors.response.use(
   (response) => {
     console.log('Response status:', response.status);
     console.log('Response data:', response.data);
     return response;
   },
-  error => {
+  async (error) => {
+    const originalRequest = error.config;
+    
+    // If the error is 401 and we haven't tried to refresh the token yet
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      try {
+        const token = await refreshAccessToken();
+        originalRequest.headers.Authorization = `Bearer ${token}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        // If refresh fails, sign out the user
+        await authService.logout();
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
+      }
+    }
+
     console.error('Response Error:', error);
     console.error('Error response:', error.response);
     console.error('Error request:', error.request);
-    
+
     if (!error.response) {
-      // Network error
       console.error('Network Error - No response received');
       return Promise.reject(new Error('Erreur de connexion au serveur. Veuillez réessayer.'));
     }
     
-    // Handle specific error status
     if (error.response) {
       const errorMessage = error.response.data?.error || error.response.data?.message || error.response.data;
       console.error('Server error message:', errorMessage);
@@ -111,7 +157,7 @@ api.interceptors.response.use(
           return Promise.reject(new Error(errorMessage || 'Une erreur est survenue'));
       }
     }
-    
+
     return Promise.reject(error);
   }
 );
@@ -149,15 +195,44 @@ export const authService = {
         password 
       });
       
-      console.log('Login successful');
-      await AsyncStorage.setItem('@ChillNow:token', response.data.access);
-      await AsyncStorage.setItem('@ChillNow:user', JSON.stringify(response.data.user));
-      return response.data;
+      console.log('Login response received:', response.data);
+      const { access, refresh, user } = response.data;
+      
+      if (!access || !refresh || !user) {
+        console.error('Incomplete login data received:', response.data);
+        throw new Error('Données de connexion incomplètes');
+      }
+
+      // Ensure user object has all required fields
+      if (!user.id || !user.email || !user.role) {
+        console.error('Invalid user data received:', user);
+        throw new Error('Données utilisateur invalides');
+      }
+      
+      // Format user data
+      const formattedUser = {
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        role: user.role,
+        profile_image: user.profile_image || null
+      };
+
+      console.log('Formatted user data:', formattedUser);
+      
+      // Set the default Authorization header
+      api.defaults.headers.common['Authorization'] = `Bearer ${access}`;
+
+      return {
+        access,
+        refresh,
+        user: formattedUser
+      };
     } catch (error) {
       console.error('Login failed:', error);
       if (error instanceof AxiosError) {
         if (error.response) {
-          // Server responded with an error status code
           const status = error.response.status;
           const errorData = error.response.data;
 
@@ -172,12 +247,10 @@ export const authService = {
               throw new Error(errorData?.error || 'Une erreur est survenue lors de la connexion');
           }
         } else if (error.request) {
-          // Request made but no response received
           throw new Error('Le serveur ne répond pas. Veuillez vérifier votre connexion internet.');
         }
       }
-      // For non-Axios errors
-      throw new Error('Une erreur inattendue est survenue');
+      throw error;
     }
   },
 
@@ -197,7 +270,11 @@ export const authService = {
       
       // Store the tokens and user data
       await AsyncStorage.setItem('@ChillNow:token', response.data.access);
+      await AsyncStorage.setItem('@ChillNow:refreshToken', response.data.refresh);
       await AsyncStorage.setItem('@ChillNow:user', JSON.stringify(response.data.user));
+
+      // Set the default Authorization header
+      api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access}`;
       
       return response.data;
     } catch (error) {
@@ -228,8 +305,13 @@ export const authService = {
 
   logout: async () => {
     try {
+      // Clear all auth data
       await AsyncStorage.removeItem('@ChillNow:token');
+      await AsyncStorage.removeItem('@ChillNow:refreshToken');
       await AsyncStorage.removeItem('@ChillNow:user');
+      
+      // Clear the default Authorization header
+      api.defaults.headers.common['Authorization'] = '';
     } catch (error) {
       console.error('Erreur logout:', error);
       throw error;

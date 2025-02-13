@@ -32,7 +32,11 @@ export type RootStackParamList = {
     annonceTitle: string;
     annonceImage: string;
   };
-  ChillsList: undefined;
+  ChillsList: {
+    showReceivedBookings?: boolean;
+    showTickets?: boolean;
+    showSoldTickets?: boolean;
+  };
   TicketsList: undefined;
   AnnouncementsList: undefined;
 };

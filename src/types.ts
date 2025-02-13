@@ -133,6 +133,42 @@ export interface PaymentResponse {
   taux_avance: number;
 }
 
+export interface Payment {
+  id: number;
+  amount: string | number;
+  status: string;
+  payment_type?: string;
+  transaction_id?: string;
+  created: string;
+  modified: string;
+  description?: string;
+  tarif?: number;
+  user?: {
+    id: number;
+    email: string;
+    first_name: string;
+    last_name: string;
+    phone_number?: string;
+    address?: string;
+    city?: string;
+  };
+  annonce?: {
+    id: number;
+    titre: string;
+    photos: Array<{ image: string }>;
+    categorie_nom: string;
+    sous_categorie_nom: string;
+    tarifs?: Array<{
+      id: number;
+      prix: number;
+      type: string;
+      nom: string;
+    }>;
+  };
+  titre?: string;
+  email?: string;
+}
+
 export type RootStackParamList = {
   Auth: undefined;
   Home: undefined;
@@ -160,6 +196,7 @@ export type RootStackParamList = {
   AnnouncementsList: undefined;
   ChillsList: undefined;
   TicketsList: undefined;
+  ReceivedBookingsList: undefined;
 };
 
 export type TabNavigationProp = BottomTabNavigationProp<RootStackParamList>;

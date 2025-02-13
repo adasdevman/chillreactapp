@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../../theme/colors';
 import { authService } from '../../../services/authService';
 import { useNavigation } from '@react-navigation/native';
@@ -69,43 +69,37 @@ export default function LoginSheet({ visible, onClose, onRegisterPress, onAnnoun
     }));
   };
 
-  const handleSubmit = async () => {
+  const handleLogin = async () => {
     try {
+      setLoading(true);
+      setError('');
+
       if (!formData.email || !formData.password) {
         setError('Veuillez remplir tous les champs');
         return;
       }
 
-      setLoading(true);
-      setError('');
-
       const response = await authService.login(formData.email, formData.password);
-      console.log('Login response:', response);
+      console.log('Login service response:', response);
 
-      if (!response || !response.access || !response.user) {
-        throw new Error('Réponse invalide du serveur');
+      if (!response || !response.access || !response.refresh || !response.user) {
+        throw new Error('Email ou mot de passe incorrect');
       }
 
-      const completeUser: User = {
-        id: response.user.id,
-        email: response.user.email,
-        first_name: response.user.first_name || '',
-        last_name: response.user.last_name || '',
-        role: response.user.role || 'UTILISATEUR',
-        profile_image: response.user.profile_image
-      };
-
-      await signIn(response.access, completeUser);
+      await signIn(response.access, response.refresh, response.user);
+      console.log('SignIn successful');
       
       navigation.navigate('Home');
-
     } catch (error) {
       console.error('Login error:', error);
-      if (error instanceof AxiosError) {
-        const errorMessage = error.response?.data?.error || 'Email ou mot de passe incorrect';
-        setError(errorMessage);
+      if (error instanceof Error) {
+        if (error.message.includes('401')) {
+          setError('Email ou mot de passe incorrect');
+        } else {
+          setError(error.message);
+        }
       } else {
-        setError('Une erreur inattendue est survenue');
+        setError('Une erreur est survenue');
       }
     } finally {
       setLoading(false);
@@ -174,8 +168,8 @@ export default function LoginSheet({ visible, onClose, onRegisterPress, onAnnoun
               </View>
 
               <TouchableOpacity 
-                style={styles.submitButton}
-                onPress={handleSubmit}
+                style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+                onPress={handleLogin}
                 disabled={loading}
               >
                 <Text style={styles.submitButtonText}>
@@ -183,14 +177,19 @@ export default function LoginSheet({ visible, onClose, onRegisterPress, onAnnoun
                 </Text>
               </TouchableOpacity>
 
+              {error ? (
+                <View style={styles.errorContainer}>
+                  <MaterialCommunityIcons name="alert-circle" size={20} color="#ff4444" />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
+
               <TouchableOpacity 
                 style={styles.guestButton}
                 onPress={handleGuestLogin}
               >
                 <Text style={styles.guestButtonText}>Se connecter en tant qu'invité</Text>
               </TouchableOpacity>
-
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
               <View style={styles.registerContainer}>
                 <TouchableOpacity onPress={handleRegisterPress}>
@@ -308,10 +307,23 @@ const styles = StyleSheet.create({
   emptySpace: {
     flex: 1,
   },
-  errorText: {
-    color: 'red',
-    textAlign: 'center',
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    padding: 12,
+    borderRadius: 8,
     marginTop: 10,
-    fontFamily: fonts.regular,
+    marginBottom: 10,
+  },
+  errorText: {
+    color: '#ff4444',
+    marginLeft: 8,
+    fontSize: 14,
+    fontFamily: fonts.medium,
+    flex: 1,
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
   },
 }); 

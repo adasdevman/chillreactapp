@@ -5,7 +5,7 @@ import { colors } from '../../theme/colors';
 import { TabBar } from './components/TabBar';
 import { NotificationIcon } from './components/NotificationIcon';
 import { PlaceCard } from '../../components';
-import { categoryService, authService, imageService } from '../../services/api';
+import { categoryService, authService, imageService, api } from '../../services/api';
 import type { Announcement } from '../../types';
 import type { Category, SubCategory } from '../../services/api';
 import axios from 'axios';
@@ -31,12 +31,14 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userImage, setUserImage] = useState<string | null>(null);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const scale = useRef(new Animated.Value(0.8)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadCategories();
     loadUserImage();
+    loadUnreadNotifications();
     Animated.parallel([
       Animated.timing(scale, {
         toValue: 1,
@@ -139,6 +141,17 @@ export default function HomeScreen() {
     }
   };
 
+  const loadUnreadNotifications = async () => {
+    try {
+      const response = await api.get('/api/notifications/');
+      const notifications = response.data || [];
+      const unreadCount = notifications.filter((notif: any) => !notif.is_read).length;
+      setUnreadNotificationsCount(unreadCount);
+    } catch (error) {
+      console.error('Erreur lors du chargement des notifications:', error);
+    }
+  };
+
   const getAnnouncementImage = () => {
     // Always return placeholder for now
     return require('../../../assets/images/place1.png');
@@ -214,7 +227,7 @@ export default function HomeScreen() {
           />
         </View>
         <TouchableOpacity style={styles.notificationButton}>
-          <NotificationIcon count={4} />
+          <NotificationIcon count={unreadNotificationsCount} />
         </TouchableOpacity>
       </View>
 

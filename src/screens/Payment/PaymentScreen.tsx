@@ -260,22 +260,22 @@ export default function PaymentScreen() {
               transaction_id: data.data.transaction_id,
               payment_id: paymentDetails?.id,
               status: 'SUCCESS'
-            });
-            navigation.navigate('PaymentSuccess');
+          });
+          navigation.navigate('PaymentSuccess');
           } catch (error) {
             console.error('Error confirming payment:', error);
             setError('Le paiement a réussi mais nous n\'avons pas pu confirmer la transaction');
             setShowPayment(false);
           }
           break;
-          
+
         case 'ERROR':
           console.error('Payment error:', data.error);
           setError('Une erreur est survenue lors du paiement');
           setShowPayment(false);
           navigation.navigate('AnnouncementDetail', { announcement });
           break;
-          
+
         case 'CLOSE':
           setShowPayment(false);
           navigation.navigate('AnnouncementDetail', { announcement });
@@ -449,7 +449,7 @@ export default function PaymentScreen() {
       >
         <Text style={styles.submitButtonText}>
           {loading ? 'Chargement...' : 'Procéder au paiement'}
-        </Text>
+          </Text>
       </TouchableOpacity>
     </ScrollView>
   );

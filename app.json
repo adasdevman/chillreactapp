@@ -16,7 +16,8 @@
       "assets/fonts/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chillnow.ios.client"
     },
     "android": {
       "adaptiveIcon": {
@@ -27,6 +28,11 @@
     "entryPoint": "./App.tsx",
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c2d145fe-4e88-4005-b8e0-4f89602bda50"
+      }
+    }
   }
 }
