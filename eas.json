@@ -5,17 +5,37 @@
   },
   "build": {
     "development": {
-      "ios": {
-        "simulator": true
-      },
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "simulator": true,
+        "resourceClass": "m-medium",
+        "image": "latest"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium",
+        "image": "latest"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "ios": {
+        "image": "latest",
+        "resourceClass": "m-medium",
+        "credentialsSource": "remote",
+        "distribution": "store",
+        "buildConfiguration": "Release",
+        "enterpriseProvisioning": "universal",
+        "prebuildCommand": "npm install && npx expo install @react-native-async-storage/async-storage@1.21.0 @react-native-picker/picker@2.6.1 react-native@0.73.6 react-native-maps@1.10.0 react-native-safe-area-context@4.8.2 && npx expo prebuild -p ios --clean && cd ios && pod install",
+        "env": {
+          "EXPO_USE_APPLE_DEVICE": "1",
+          "EXPO_NO_DOTENV": "1",
+          "CI": "1"
+        }
+      }
     }
   },
   "submit": {

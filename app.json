@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ChillnowApp",
+    "name": "ChillNow",
     "slug": "ChillnowApp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -17,23 +17,28 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.chillnow.ios.client"
+      "bundleIdentifier": "com.chillnow.ios.client",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/app_icon.png",
         "backgroundColor": "#222222"
       },
-      "package": "com.chillnow.ios.client"
+      "package": "com.chillnow.android.client"
     },
     "entryPoint": "./App.tsx",
-    "plugins": [
-      "expo-font"
-    ],
     "extra": {
       "eas": {
-        "projectId": "c2d145fe-4e88-4005-b8e0-4f89602bda50"
+        "projectId": "4524fd6b-0015-46e2-aba3-bff8bea68401"
       }
-    }
+    },
+    "owner": "adasfranck",
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

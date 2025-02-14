@@ -79,7 +79,10 @@ workflows:
 
       - name: Set up code signing settings
         script: |
-          xcode-project use-profiles --warn-only
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
 
       - name: Increment build number
         script: |
@@ -91,10 +94,16 @@ workflows:
       - name: Build ipa for App Store
         script: |
           cd ios
+          
+          # Clean and create build directory
           rm -rf build
           mkdir -p build
           
-          # Build and archive
+          # Set environment variables
+          export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+          export PATH="$DEVELOPER_DIR/usr/bin:$PATH"
+          
+          # Build archive
           xcodebuild \
             -workspace ChillnowApp.xcworkspace \
             -scheme "$XCODE_SCHEME" \
@@ -103,20 +112,20 @@ workflows:
             clean archive \
             CODE_SIGN_IDENTITY="iPhone Distribution" \
             DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
             CODE_SIGN_STYLE="Automatic" \
-            | xcpretty
+            ENABLE_BITCODE=NO \
+            | xcpretty && exit ${PIPESTATUS[0]}
           
           # Export IPA
           xcodebuild -exportArchive \
             -archivePath build/ChillnowApp.xcarchive \
             -exportOptionsPlist exportOptions.plist \
             -exportPath build/ipa \
-            -allowProvisioningUpdates
+            -allowProvisioningUpdates \
+            | xcpretty && exit ${PIPESTATUS[0]}
 
     artifacts:
       - ios/build/ipa/*.ipa
-      - ios/xcodebuild.log
       - ios/build/ChillnowApp.xcarchive/dSYMs/*
 
     publishing:
