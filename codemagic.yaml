@@ -14,8 +14,6 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.chillnow.ios.client
-        provisioning_profiles:
-          - "match AppStore com.chillnow.ios.client"
     scripts:
       - name: Install dependencies
         script: |
