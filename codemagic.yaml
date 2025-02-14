@@ -8,8 +8,12 @@ workflows:
         APP_STORE_APPLE_ID: 6473549599
         BUNDLE_ID: "com.chillnow.ios.client"
         XCODE_SCHEME: "ChillnowApp"
+        DEVELOPMENT_TEAM: "BUAXN7XNMZ" # Replace with your actual team ID
         node: 18.18.2
       xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.chillnow.ios.client
     scripts:
       - name: Install dependencies
         script: |
@@ -43,6 +47,29 @@ workflows:
         script: |
           cd ios && pod install && cd ..
 
+      - name: Create exportOptions.plist
+        script: |
+          cat >> ios/exportOptions.plist << EOL
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>teamID</key>
+              <string>$DEVELOPMENT_TEAM</string>
+              <key>signingStyle</key>
+              <string>automatic</string>
+              <key>stripSwiftSymbols</key>
+              <true/>
+              <key>uploadBitcode</key>
+              <false/>
+              <key>uploadSymbols</key>
+              <true/>
+          </dict>
+          </plist>
+          EOL
+
       - name: Increment build number
         script: |
           LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID")
@@ -53,15 +80,18 @@ workflows:
       - name: Build ipa for App Store
         script: |
           cd ios
-          xcodebuild -project "ChillnowApp.xcodeproj" \
+          xcodebuild -workspace "ChillnowApp.xcworkspace" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
-            -archivePath "build/ChillnowApp.xcarchive" archive
+            -archivePath "build/ChillnowApp.xcarchive" \
+            -allowProvisioningUpdates \
+            archive
 
           xcodebuild -exportArchive \
             -archivePath "build/ChillnowApp.xcarchive" \
             -exportOptionsPlist "exportOptions.plist" \
-            -exportPath "build/ipa"
+            -exportPath "build/ipa" \
+            -allowProvisioningUpdates
 
     artifacts:
       - ios/build/ipa/*.ipa
