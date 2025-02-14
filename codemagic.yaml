@@ -14,6 +14,8 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.chillnow.ios.client
+        provisioning_profiles:
+          - "match AppStore com.chillnow.ios.client"
     scripts:
       - name: Install dependencies
         script: |
@@ -46,6 +48,8 @@ workflows:
       - name: Install CocoaPods dependencies
         script: |
           cd ios
+          pod deintegrate
+          pod cache clean --all
           pod install
           cd ..
 
@@ -71,14 +75,13 @@ workflows:
               <true/>
               <key>compileBitcode</key>
               <false/>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.chillnow.ios.client</key>
-                  <string>match AppStore $BUNDLE_ID</string>
-              </dict>
           </dict>
           </plist>
           EOL
+
+      - name: Set up code signing settings
+        script: |
+          xcode-project use-profiles --warn-only
 
       - name: Increment build number
         script: |
@@ -91,7 +94,7 @@ workflows:
         script: |
           cd ios
           # Clean build folder
-          rm -rf build
+          rm -rf build DerivedData
           mkdir -p build
           
           # Set build settings
@@ -99,7 +102,15 @@ workflows:
           EXPORT_PATH="$PWD/build/ipa"
           
           # Build archive
-          xcodebuild clean archive \
+          xcodebuild clean \
+            -workspace "ChillnowApp.xcworkspace" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -derivedDataPath DerivedData \
+            -allowProvisioningUpdates \
+            | xcpretty
+
+          xcodebuild archive \
             -workspace "ChillnowApp.xcworkspace" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
@@ -107,25 +118,23 @@ workflows:
             -allowProvisioningUpdates \
             -destination 'generic/platform=iOS' \
             DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
-            PROVISIONING_PROFILE_SPECIFIER="match AppStore $BUNDLE_ID" \
             CODE_SIGN_IDENTITY="iPhone Distribution" \
-            CODE_SIGN_STYLE="Manual" \
-            SWIFT_OPTIMIZATION_LEVEL="-O" \
-            SWIFT_COMPILATION_MODE=wholemodule \
-            OTHER_SWIFT_FLAGS="-D RELEASE"
+            CODE_SIGN_STYLE="Automatic" \
+            | xcpretty
 
           # Export archive
           xcodebuild -exportArchive \
             -archivePath "$ARCHIVE_PATH" \
             -exportOptionsPlist "exportOptions.plist" \
             -exportPath "$EXPORT_PATH" \
-            -allowProvisioningUpdates
+            -allowProvisioningUpdates \
+            | xcpretty
 
     artifacts:
       - ios/build/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+      - ios/build/ChillnowApp.xcarchive/dSYMs/*
+      - ios/DerivedData/Logs/Build/*
 
     publishing:
       email:
