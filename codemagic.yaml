@@ -41,28 +41,30 @@ workflows:
 
       - name: Install CocoaPods dependencies
         script: |
-          cd ios && pod install
+          cd ios && pod install && cd ..
 
       - name: Increment build number
         script: |
-          cd $CM_BUILD_DIR
           LATEST_BUILD_NUMBER=$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID")
-          agvtool new-version -all $(($LATEST_BUILD_NUMBER + 1))
+          cd ios
+          xcrun agvtool new-version -all $(($LATEST_BUILD_NUMBER + 1))
+          cd ..
 
       - name: Build ipa for App Store
         script: |
-          xcodebuild -project "$CM_BUILD_DIR/ios/ChillnowApp.xcodeproj" \
+          cd ios
+          xcodebuild -project "ChillnowApp.xcodeproj" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
-            -archivePath "$CM_BUILD_DIR/ios/build/ChillnowApp.xcarchive" archive
+            -archivePath "build/ChillnowApp.xcarchive" archive
 
           xcodebuild -exportArchive \
-            -archivePath "$CM_BUILD_DIR/ios/build/ChillnowApp.xcarchive" \
-            -exportOptionsPlist "$CM_BUILD_DIR/ios/exportOptions.plist" \
-            -exportPath "$CM_BUILD_DIR/build/ios/ipa"
+            -archivePath "build/ChillnowApp.xcarchive" \
+            -exportOptionsPlist "exportOptions.plist" \
+            -exportPath "build/ipa"
 
     artifacts:
-      - build/ios/ipa/*.ipa
+      - ios/build/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
