@@ -1,4 +1,4 @@
-package com.chillnowapp
+package com.chillnow.ios.client
 
 import android.app.Application
 import com.facebook.react.PackageList

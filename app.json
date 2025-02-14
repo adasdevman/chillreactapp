@@ -23,7 +23,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/app_icon.png",
         "backgroundColor": "#222222"
-      }
+      },
+      "package": "com.chillnow.ios.client"
     },
     "entryPoint": "./App.tsx",
     "plugins": [

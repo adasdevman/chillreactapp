@@ -1,4 +1,4 @@
-package com.chillnowapp
+package com.chillnow.ios.client
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
