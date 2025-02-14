@@ -33,9 +33,14 @@ workflows:
 
       - name: Build ipa for App Store
         script: |
-          xcode-project build-ipa \
-            --project "$CM_BUILD_DIR/ios/ChillnowApp.xcodeproj"\  # Assure-toi que ce fichier existe
-            --scheme "$XCODE_SCHEME"
+          xcodebuild -project "$CM_BUILD_DIR/ios/ChillnowApp.xcodeproj" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -archivePath "$CM_BUILD_DIR/ios/build/ChillnowApp.xcarchive" archive
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/ios/build/ChillnowApp.xcarchive" \
+            -exportOptionsPlist "$CM_BUILD_DIR/ios/exportOptions.plist" \
+            -exportPath "$CM_BUILD_DIR/build/ios/ipa"
 
     artifacts:
       - build/ios/ipa/*.ipa
