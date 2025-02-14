@@ -2,22 +2,32 @@ workflows:
   ios-workflow:
     name: iOS Workflow
     integrations:
-      app_store_connect: codemanagekeychillAdmin  # Remplace par le nom exact de ton intégration Codemagic
+      app_store_connect: codemanagekeychillAdmin
     environment:
       vars:
         APP_STORE_APPLE_ID: 6473549599
         BUNDLE_ID: "com.chillnow.ios.client"
-        XCODE_SCHEME: "ChillnowApp"  # Remplace par ton scheme exact
-        node: latest
+        XCODE_SCHEME: "ChillnowApp"
+        node: 18.18.2
+      xcode: latest
     scripts:
       - name: Install dependencies
         script: |
-          npm ci
-          npm install -g expo-cli
+          npm cache clean --force
+          rm -rf node_modules
+          npm install
+          npm install -g expo-cli@latest
+          npm install -g eas-cli@latest
+          
+      - name: Setup Expo and environment
+        script: |
+          npx expo install --fix
+          npx expo doctor --fix-dependencies
           
       - name: Run Expo Prebuild
         script: |
-          npx expo prebuild --clean
+          rm -rf ios android
+          npx expo prebuild --platform ios --clean
 
       - name: Set Info.plist values
         script: |
