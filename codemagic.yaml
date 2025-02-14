@@ -8,7 +8,7 @@ workflows:
         APP_STORE_APPLE_ID: 6473549599
         BUNDLE_ID: "com.chillnow.ios.client"
         XCODE_SCHEME: "ChillnowApp"
-        DEVELOPMENT_TEAM: "BUAXN7XNMZ" # Replace with your actual team ID
+        DEVELOPMENT_TEAM: "BUAXN7XNMZ"
         node: 18.18.2
       xcode: latest
       ios_signing:
@@ -41,15 +41,18 @@ workflows:
         script: |
           PLIST=$CM_BUILD_DIR/ios/$XCODE_SCHEME/Info.plist
           PLIST_BUDDY=/usr/libexec/PlistBuddy
-          $PLIST_BUDDY -c "Add :ITSAppUsesNonExemptEncryption bool false" $PLIST
+          $PLIST_BUDDY -c "Add :ITSAppUsesNonExemptEncryption bool false" $PLIST || true
 
       - name: Install CocoaPods dependencies
         script: |
-          cd ios && pod install && cd ..
+          cd ios
+          pod install
+          cd ..
 
       - name: Create exportOptions.plist
         script: |
-          cat >> ios/exportOptions.plist << EOL
+          mkdir -p ios/build
+          cat > ios/exportOptions.plist << EOL
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -66,6 +69,13 @@ workflows:
               <false/>
               <key>uploadSymbols</key>
               <true/>
+              <key>compileBitcode</key>
+              <false/>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.chillnow.ios.client</key>
+                  <string>match AppStore $BUNDLE_ID</string>
+              </dict>
           </dict>
           </plist>
           EOL
@@ -80,17 +90,35 @@ workflows:
       - name: Build ipa for App Store
         script: |
           cd ios
-          xcodebuild -workspace "ChillnowApp.xcworkspace" \
+          # Clean build folder
+          rm -rf build
+          mkdir -p build
+          
+          # Set build settings
+          ARCHIVE_PATH="$PWD/build/ChillnowApp.xcarchive"
+          EXPORT_PATH="$PWD/build/ipa"
+          
+          # Build archive
+          xcodebuild clean archive \
+            -workspace "ChillnowApp.xcworkspace" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
-            -archivePath "build/ChillnowApp.xcarchive" \
+            -archivePath "$ARCHIVE_PATH" \
             -allowProvisioningUpdates \
-            archive
+            -destination 'generic/platform=iOS' \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+            PROVISIONING_PROFILE_SPECIFIER="match AppStore $BUNDLE_ID" \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            CODE_SIGN_STYLE="Manual" \
+            SWIFT_OPTIMIZATION_LEVEL="-O" \
+            SWIFT_COMPILATION_MODE=wholemodule \
+            OTHER_SWIFT_FLAGS="-D RELEASE"
 
+          # Export archive
           xcodebuild -exportArchive \
-            -archivePath "build/ChillnowApp.xcarchive" \
+            -archivePath "$ARCHIVE_PATH" \
             -exportOptionsPlist "exportOptions.plist" \
-            -exportPath "build/ipa" \
+            -exportPath "$EXPORT_PATH" \
             -allowProvisioningUpdates
 
     artifacts:
