@@ -91,48 +91,33 @@ workflows:
       - name: Build ipa for App Store
         script: |
           cd ios
-          # Clean build folder
-          rm -rf build DerivedData
+          rm -rf build
           mkdir -p build
           
-          # Set build settings
-          ARCHIVE_PATH="$PWD/build/ChillnowApp.xcarchive"
-          EXPORT_PATH="$PWD/build/ipa"
-          
-          # Build archive
-          xcodebuild clean \
-            -workspace "ChillnowApp.xcworkspace" \
+          # Build and archive
+          xcodebuild \
+            -workspace ChillnowApp.xcworkspace \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
-            -derivedDataPath DerivedData \
-            -allowProvisioningUpdates \
-            | xcpretty
-
-          xcodebuild archive \
-            -workspace "ChillnowApp.xcworkspace" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Release \
-            -archivePath "$ARCHIVE_PATH" \
-            -allowProvisioningUpdates \
-            -destination 'generic/platform=iOS' \
-            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+            -archivePath build/ChillnowApp.xcarchive \
+            clean archive \
             CODE_SIGN_IDENTITY="iPhone Distribution" \
+            DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
             CODE_SIGN_STYLE="Automatic" \
             | xcpretty
-
-          # Export archive
+          
+          # Export IPA
           xcodebuild -exportArchive \
-            -archivePath "$ARCHIVE_PATH" \
-            -exportOptionsPlist "exportOptions.plist" \
-            -exportPath "$EXPORT_PATH" \
-            -allowProvisioningUpdates \
-            | xcpretty
+            -archivePath build/ChillnowApp.xcarchive \
+            -exportOptionsPlist exportOptions.plist \
+            -exportPath build/ipa \
+            -allowProvisioningUpdates
 
     artifacts:
       - ios/build/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
+      - ios/xcodebuild.log
       - ios/build/ChillnowApp.xcarchive/dSYMs/*
-      - ios/DerivedData/Logs/Build/*
 
     publishing:
       email:
