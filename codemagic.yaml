@@ -19,10 +19,14 @@ workflows:
           npm install -g expo-cli@latest
           npm install -g eas-cli@latest
           
-      - name: Setup Expo and environment
+      - name: Update Expo dependencies
         script: |
+          npx expo install @react-native-async-storage/async-storage@1.21.0
+          npx expo install @react-native-picker/picker@2.6.1
+          npx expo install react-native@0.73.6
+          npx expo install react-native-maps@1.10.0
+          npx expo install react-native-safe-area-context@4.8.2
           npx expo install --fix
-          npx expo doctor --fix-dependencies
           
       - name: Run Expo Prebuild
         script: |
