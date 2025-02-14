@@ -8,10 +8,16 @@ workflows:
         APP_STORE_APPLE_ID: 6473549599
         BUNDLE_ID: "com.chillnow.ios.client"
         XCODE_SCHEME: "ChillnowApp"  # Remplace par ton scheme exact
+        node: latest
     scripts:
+      - name: Install dependencies
+        script: |
+          npm ci
+          npm install -g expo-cli
+          
       - name: Run Expo Prebuild
         script: |
-          npx expo prebuild
+          npx expo prebuild --clean
 
       - name: Set Info.plist values
         script: |

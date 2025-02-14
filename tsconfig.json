@@ -6,7 +6,14 @@
     "baseUrl": ".",
     "paths": {
       "*": ["src/*"]
-    }
+    },
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "types": ["react", "react-native"],
+    "lib": ["es2015", "es2016", "esnext", "dom"]
   },
   "include": [
     "src/**/*.ts",
